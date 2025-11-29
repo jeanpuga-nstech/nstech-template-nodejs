@@ -1,0 +1,41 @@
+{
+    "$schema": "http://json-schema.org/schema",
+    "id": "ExpressBackendSchema",
+    "title": "Express Backend Schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "The name of the resource",
+        "$default": {
+          "$source": "argv",
+          "index": 0
+        },
+        "x-prompt": "What name would you like to use for the resource?"
+      },
+      "path": {
+        "type": "string",
+        "description": "The path where the backend will be generated",
+        "default": "backend"
+      },
+      "database": {
+        "type": "string",
+        "description": "Database type",
+        "enum": ["mongodb", "postgresql", "mysql", "sqlite"],
+        "default": "mongodb",
+        "x-prompt": "Which database would you like to use?"
+      },
+      "auth": {
+        "type": "boolean",
+        "description": "Include authentication?",
+        "default": false,
+        "x-prompt": "Would you like to include authentication?"
+      },
+      "port": {
+        "type": "number",
+        "description": "Port for the server",
+        "default": 3000
+      }
+    },
+    "required": ["name"]
+  }

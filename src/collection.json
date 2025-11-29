@@ -1,0 +1,10 @@
+{
+    "$schema": "../node_modules/@angular-devkit/schematics/collection-schema.json",
+    "schematics": {
+      "express-backend": {
+        "description": "Generate an Express backend with CRUD operations",
+        "factory": "./my-express-schematic/index#expressBackend",
+        "schema": "./my-express-schematic/schema.json"
+      }
+    }
+  }
