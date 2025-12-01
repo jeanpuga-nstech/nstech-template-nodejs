@@ -20,7 +20,7 @@ function getKey(header, callback) {
 }
 
 // Middleware para validar o JWT e as roles
-const validateToken = (requiredRoles = []) => {
+const validateAudience = (audience) => {
     return (req, res, next) => {
         const token = req.headers['authorization']?.split(' ')[1];
 
@@ -39,22 +39,47 @@ const validateToken = (requiredRoles = []) => {
                 return res.status(403).json({ message: 'Token ainda não é válido' });
             }
 
-            const validAudiences = ['fracionado', 'hub-de-ofertas', 'realm-management', 'backoffice', 'config-nsapps', 'painel-de-produtos', 'poc-ao-vivo', 'account'];
-            const hasValidAudience = decoded.aud.some(aud => validAudiences.includes(aud));
+            const hasValidAudience = decoded.aud.some(aud => aud === audience);
 
             if (!hasValidAudience) {
                 return res.status(403).json({ message: 'Audience inválida' });
             }
 
-            // Extraindo roles
             req.user = {
-                id: decoded.sub,
-                roles: decoded.realm_access.roles.concat(...Object.values(decoded.resource_access).map(resource => resource.roles))
+                id: decoded.sub
             };
 
-            // Verifica se o usuário possui pelo menos uma das roles necessárias
-            const hasRequiredRole = requiredRoles.some(role => req.user.roles.includes(role));
-            if (requiredRoles.length > 0 && !hasRequiredRole) {
+            next();
+        });
+    };
+};
+
+const validateRole = (audience, role) => {
+    return (req, res, next) => {
+        const token = req.headers['authorization']?.split(' ')[1];
+
+        if (!token) {
+            return res.status(401).json({ message: 'Token não fornecido' });
+        }
+
+        jwt.verify(token, getKey, { algorithms: ['RS256'] }, (err, decoded) => {
+            if (err) {
+                return res.status(403).json({ message: 'Token inválido' });
+            }
+
+            // Verifica o issued time (iat) e audience (aud)
+            const currentTime = Math.floor(Date.now() / 1000);
+            if (decoded.iat > currentTime) {
+                return res.status(403).json({ message: 'Token ainda não é válido' });
+            }
+
+            if (audience=="") {
+                return res.status(403).json({ message: 'Audience inválida' });
+            }
+
+            var hasPermission = decoded.resource_access[audience]?.roles.includes(role)??false;
+
+            if ((role??"")=="" || !hasPermission) {
                 return res.status(403).json({ message: 'Acesso negado: Permissão insuficiente' });
             }
 
@@ -63,8 +88,34 @@ const validateToken = (requiredRoles = []) => {
     };
 };
 
+// Rota protegida que requer uma audiência específica
+app.get('/protected1', validateAudience('hub-de-agendamento'), (req, res) => {
+    res.json({
+        message: 'Usuário possui audiencia válida',
+        user: req.user
+    });
+});
+
+
 // Rota protegida que requer uma role específica
-app.get('/protected', validateToken(['fracionado', 'dashboard']), (req, res) => {
+app.get('/protected2', validateRole('hub-de-agendamento', 'admin'), (req, res) => {
+    res.json({
+        message: 'Acesso concedido',
+        user: req.user
+    });
+});
+
+// Rota protegida que requer uma role específica
+app.get('/protected3', validateRole('hub-de-agendamento', 'dashboard'), (req, res) => {
+    res.json({
+        message: 'Acesso concedido',
+        user: req.user
+    });
+});
+
+
+// Rota protegida que requer uma audiência específica
+app.get('/protected4', validateAudience('hub-de-agendamentossss'), (req, res) => {
     res.json({
         message: 'Acesso concedido',
         user: req.user
@@ -72,7 +123,7 @@ app.get('/protected', validateToken(['fracionado', 'dashboard']), (req, res) => 
 });
 
 // Inicia o servidor
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
 });
