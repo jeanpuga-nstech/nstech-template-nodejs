@@ -27,7 +27,7 @@ export class BucketService implements OnModuleInit {
     this.expiresIn = 60 * 15; // 15 minutos
   }
 
-  async generateUploadUrl(folder: "wagons" | "trucks", fileName: string, mimetype: string) {
+  async generateUploadUrl(folder: string, fileName: string, mimetype: string) {
     const ext = extname(fileName).toLowerCase();
     const directory = this.getFileDirectory(mimetype);
 

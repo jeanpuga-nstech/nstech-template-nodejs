@@ -26,6 +26,9 @@ export class EnvironmentVariables {
   @IsString()
   JWT_SECRET!: string;
 
+  @IsString()
+  KEYCLOAK_ISSUER!: string;
+
   @Equals("UTC")
   TZ!: "UTC";
 

@@ -1,547 +1,365 @@
-## 🚀 Tecnologias
+# nstech-template-nodejs
 
-Principais tecnologias do projeto:
+Template oficial para APIs NestJS da NSTech. Ao criar um novo serviço, clone este repositório e adapte conforme o domínio do seu projeto.
 
-- [TypeScript](https://www.typescriptlang.org/) - Linguagem principal
-- [NestJS](https://nestjs.com/) - Framework backend
-- [Kysely](https://kysely.dev/) - Query builder type-safe
-- [Kanel](https://kristiandupont.github.io/kanel/) - Gerador de tipos do banco
-- [Jest](https://jestjs.io/pt-BR/) - Framework de testes
-- [Sentry](https://sentry.io/) - Monitoramento de erros
-- [Prometheus](https://prometheus.io/) - Métricas da aplicação
-- [AWS SDK](https://aws.amazon.com/sdk-for-javascript/) - Integração com AWS
+---
 
-## 📋 Pré-requisitos
+## Tecnologias
 
-### Ferramentas necessárias
+| Tecnologia | Finalidade |
+|---|---|
+| [NestJS](https://nestjs.com/) | Framework backend |
+| [Prisma](https://www.prisma.io/) | ORM e migrations |
+| [PostgreSQL](https://www.postgresql.org/) | Banco de dados |
+| [Terminus](https://docs.nestjs.com/recipes/terminus) | Health checks (Kubernetes probes) |
+| [Prometheus](https://prometheus.io/) | Métricas da aplicação |
+| [Sentry](https://sentry.io/) | Monitoramento de erros |
+| [AWS S3](https://aws.amazon.com/s3/) | Upload e download de arquivos |
+| [Keycloak / corporate-auth-policies](https://github.com/orgs/nstechhub/packages/npm/package/corporate-auth-policies) | Validação de roles e audience via JWKS |
+| [Jest](https://jestjs.io/) | Testes unitários |
+| [Biome](https://biomejs.dev/) | Lint e formatação |
 
-- [Node.js](https://nodejs.org/en/) (versão 22.11.0 ou superior)
-- [AWS CLI](https://aws.amazon.com/cli/) configurado com perfil IAM
-- [PostgreSQL](https://www.postgresql.org/) para o banco de dados
-- [Biome](https://biomejs.dev/pt-br/) (considere instalar o plugin no seu editor)
+---
 
-### Configuração AWS
+## Pré-requisitos
 
-**IMPORTANTE**: Para usar o script `load-env.ts`, você precisa ter sua conta IAM configurada na AWS CLI:
+- Node.js **22+** (gerenciado via [Volta](https://volta.sh/))
+- PostgreSQL rodando localmente ou via Docker
+- Acesso ao GitHub Packages para instalar `@nstechhub/corporate-auth-policies`
 
-```bash
-# Configure seu perfil AWS (recomendado)
-$ aws configure --profile gbm-profile
+---
 
-# Ou configure as credenciais padrão
-$ aws configure
-```
+## Configuração inicial
 
-O script carrega automaticamente as variáveis de ambiente do AWS Secrets Manager baseado no nome do projeto.
-
-## 🚀 Executando o Projeto
-
-### 1. Configuração inicial
+### 1. Instalar dependências
 
 ```bash
-# Clone o repositório
-$ git clone <repository-url>
-$ cd gbm-app-template-backend
-
-# Instale as dependências
-$ npm install
-
-# Configure o arquivo kysely.config.ts com o nome do seu projeto
-# Altere o nome da tabela de migrations e lock conforme necessário
+npm install
 ```
 
-### 2. Configuração do ambiente
+> Se o `npm install` falhar com erro 404 no pacote `@nstechhub/*`, configure o GitHub Packages:
+>
+> Crie ou edite `.npmrc` na raiz:
+> ```
+> @nstechhub:registry=https://npm.pkg.github.com
+> //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+> ```
+> Defina `GITHUB_TOKEN` com um token de acesso pessoal com escopo `read:packages`.
+
+### 2. Configurar variáveis de ambiente
+
+Copie o arquivo de exemplo e preencha os valores:
 
 ```bash
-# Carregue as variáveis de ambiente do AWS Secrets Manager
-$ npm run env:pull
-
-# Rode as migrations do banco de dados
-$ npm run migrate:latest
-
-# Gere a tipagem do banco de dados
-$ npm run kanel
+cp .env.example .env
 ```
 
-### 3. Executar a aplicação
+Variáveis obrigatórias:
 
 ```bash
-# Modo desenvolvimento
-$ npm run start
-
-# Modo watch (recomendado para desenvolvimento)
-$ npm run start:dev
-
-# Modo produção
-$ npm run start:prod
-```
-
-### 4. Executar testes
-
-```bash
-# Testes unitários
-$ npm run test
-
-# Testes com watch
-$ npm run test --watch
-
-# Cobertura de testes
-$ npm run test --coverage
-```
-
-## 🗄️ Banco de Dados
-
-### Comandos Kysely
-
-```bash
-# Criar nova migration
-$ npx kysely migrate:make create_users_table
-
-# Criar nova seed
-$ npx kysely seed:make seed_initial_users
-
-# Executar migrations
-$ npm run migrate:latest
-
-# Executar seeds
-$ npm run seed:run
-
-# Gerar tipagem do banco
-$ npm run kanel
-```
-
-### Exemplo de Migration
-
-```typescript
-import { Kysely, sql } from 'kysely'
-
-export async function up(db: Kysely<any>): Promise<void> {
-  await db.schema
-    .createTable('users')
-    .addColumn('id', 'serial', (col) => col.primaryKey())
-    .addColumn('name', 'varchar(255)', (col) => col.notNull())
-    .addColumn('email', 'varchar(255)', (col) => col.notNull().unique())
-    .addColumn('created_at', 'timestamp', (col) => 
-      col.defaultTo(sql`now()`).notNull()
-    )
-    .execute()
-}
-
-export async function down(db: Kysely<any>): Promise<void> {
-  await db.schema.dropTable('users').execute()
-}
-```
-
-## 🏗️ Arquitetura e Padrões
-
-### Repository Pattern
-
-O projeto utiliza o Repository Pattern para abstrair o acesso aos dados. Crie repositories para entidades principais:
-
-```typescript
-// src/infra/repositories/user.repository.ts
-import { Inject, Injectable } from "@nestjs/common";
-import { Kysely } from "kysely";
-import { DATABASE_CONNECTION } from "@/infra/database/database.module";
-import Database from "@/infra/database/schema/Database";
-import { UsersId } from "@/infra/database/schema/public/Users";
-import { Repository } from "./interfaces";
-
-export class UserRepository {
-  constructor(@Inject(DATABASE_CONNECTION) private db: Kysely<Database>) {}
-
-  async findById(id: UsersId) {
-    return await this.db
-      .withSchema("public")
-      .selectFrom("users")
-      .where("id", "=", id)
-      .selectAll()
-      .executeTakeFirstOrThrow();
-  }
-
-  async findByEmail(email: string) {
-    return await this.db
-      .withSchema("public")
-      .selectFrom("users")
-      .where("email", "=", email)
-      .selectAll()
-      .executeTakeFirst();
-  }
-
-  async create(userData: CreateUserData) {
-    return await this.db
-      .withSchema("public")
-      .insertInto("users")
-      .values(userData)
-      .returning("id")
-      .executeTakeFirstOrThrow();
-  }
-}
-```
-
-**Quando criar um Repository:**
-- Para cada entidade principal do domínio
-- Quando há queries complexas que precisam ser reutilizadas
-- Para abstrair detalhes de implementação do banco de dados
-- Para facilitar testes unitários
-
-
-## 🛠️ Utilitários Disponíveis
-
-### Formatação de Data
-
-O projeto possui utilitários para manipulação de datas usando `dayjs`:
-
-```typescript
-import dayjs from "@/lib/dayjs";
-import { 
-  isAfter, 
-  isAfterOrSame, 
-  format, 
-  formatWithTime, 
-  formatWithTimezone,
-  addOneDay,
-  diffInMinutes 
-} from "@/shared/utils/date";
-
-// Exemplos de uso
-const now = dayjs();
-const formattedDate = now.format("DD/MM/YYYY HH:mm:ss");
-const isoString = now.toISOString();
-
-// Verificar se uma data é posterior
-const isLater = isAfter("2024-12-25", "2024-12-24"); // true
-
-// Formatar com timezone
-const saoPauloTime = formatWithTimezone(new Date(), "America/Sao_Paulo");
-// "2024-12-20T15:30:00-03:00"
-
-// Adicionar tempo específico
-const withTime = formatWithTime("2024-12-20", "14:30:00", "America/Sao_Paulo");
-
-// Diferença em minutos
-const minutes = diffInMinutes(new Date(), dayjs().subtract(2, 'hours').toDate());
-// 120
-```
-
-### Formatação de Números
-
-```typescript
-import { formatDecimal } from "@/shared/utils/number";
-
-// Exemplos de uso
-const price = formatDecimal(1234.5678, 2); // "1234.57"
-const weight = formatDecimal(42.1, 3); // "42.100"
-const percentage = formatDecimal(0.156789, 4); // "0.1568"
-```
-
-### Serviço de Bucket (AWS S3)
-
-```typescript
-import { BucketService } from "@/infra/bucket/bucket.service";
-
-// Gerar URL de upload
-const uploadData = await bucketService.generateUploadUrl(
-  "trucks", // ou "wagons"
-  "documento.pdf",
-  "application/pdf"
-);
-// Retorna: { url: "presigned-url", key: "path/key", expiresIn: 900 }
-
-// Obter URL de download
-const downloadUrl = await bucketService.get("images/trucks/uuid.jpg");
-
-// Deletar múltiplos arquivos
-await bucketService.deleteObjects([
-  "images/trucks/old-image.jpg",
-  "videos/wagons/old-video.mp4"
-]);
-
-// Identificar tipo de arquivo
-const fileType = bucketService.defineType("image/jpeg"); // "photo"
-const videoType = bucketService.defineType("video/mp4"); // "video"
-const docType = bucketService.defineType("application/pdf"); // "file"
-```
-
-### DTOs e Validação
-
-Use as classes base para DTOs consistentes:
-
-```typescript
-import { BaseEntityDTO, SupportedLanguages } from "@/infra/repositories/dto/base";
-import { ApiProperty } from "@nestjs/swagger";
-import { IsDateString, IsNumber, IsEnum } from "class-validator";
-
-export class UserDTO extends BaseEntityDTO {
-  @ApiProperty({ example: "João Silva" })
-  @IsString()
-  name!: string;
-
-  @ApiProperty({ example: "joao@gbmlogistica.com.br" })
-  @IsEmail()
-  email!: string;
-
-  @ApiProperty({ example: "2024-01-15T10:30:00Z" })
-  @IsDateString()
-  createdAt!: string;
-
-  @ApiProperty({ example: 1500.75 })
-  @IsNumber()
-  salary!: number;
-
-  @ApiProperty({ example: "pt-br", enum: ["en-us", "pt-br", "es"] })
-  @IsEnum(["en-us", "pt-br", "es"])
-  language!: SupportedLanguages;
-}
-```
-
-### Tratamento de Erros
-
-Crie erros customizados seguindo o padrão:
-
-```typescript
-// src/shared/errors/user-not-found-error.ts
-import { NotFoundException } from "@nestjs/common";
-import { SupportedLanguages } from "@/infra/repositories/dto/base";
-
-export class UserNotFoundError extends NotFoundException {
-  constructor(language: SupportedLanguages = "pt-br") {
-    const errorMessage = {
-      "en-us": "User not found",
-      "pt-br": "Usuário não encontrado",
-      "es": "Usuario no encontrado",
-    };
-
-    super(errorMessage[language]);
-    this.name = "UserNotFoundError";
-  }
-}
-```
-
-## 📊 Monitoramento e Observabilidade
-
-### Métricas Prometheus
-
-O projeto inclui métricas automáticas disponíveis em `/metrics`:
-
-- `http_requests_total` - Contador de requisições HTTP
-- `http_request_duration_seconds` - Duração das requisições
-- `http_request_size_bytes` - Tamanho das requisições
-- `app_uptime_seconds` - Tempo de atividade da aplicação
-
-### Sentry
-
-Monitoramento de erros configurado automaticamente. Configure a variável `SENTRY_DSN` no ambiente:
-
-```bash
-SENTRY_DSN=https://your-project@sentry.io/project-id
-```
-
-### Swagger/Documentação API
-
-A documentação da API está disponível em `/doc` quando `NODE_ENV !== "production"`.
-
-**Credenciais de acesso:**
-- **Usuário:** admin
-- **Senha:** Gbmtech@3344
-
-## 🧪 Testes
-
-### Estrutura de Testes
-
-Use o padrão estabelecido para testes unitários:
-
-```typescript
-// src/services/__test__/user.service.spec.ts
-import { Mocked, TestBed } from "@suites/unit";
-import { UserService } from "../user.service";
-import { UserRepository } from "@/infra/repositories/user.repository";
-
-describe("UserService", () => {
-  let service: UserService;
-  let repository: Mocked<UserRepository>;
-  let unitOfWork: Mocked<UnitOfWork<Database>>;
-
-  beforeEach(async () => {
-    const { unit, unitRef } = await TestBed.solitary(UserService).compile();
-    
-    service = unit;
-    unitOfWork = unitRef.get<UnitOfWork<Database>>(UnitOfWork);
-    repository = mockClass(UserRepository);
-  });
-
-  it("should find user by id", async () => {
-    // Arrange
-    const userId = 123;
-    const mockUser = { 
-      id: userId, 
-      name: "João Silva", 
-      email: "joao@test.com" 
-    };
-
-    unitOfWork.getRepository.mockReturnValue(repository);
-    repository.findById.mockResolvedValue(mockUser);
-
-    // Act
-    const result = await service.findById(userId);
-
-    // Assert
-    expect(result).toEqual(mockUser);
-    expect(repository.findById).toHaveBeenCalledWith(userId);
-  });
-
-  it("should throw error when user not found", async () => {
-    unitOfWork.getRepository.mockReturnValue(repository);
-    // Arrange
-    repository.findById.mockRejectedValue(new Error("User not found"));
-
-    // Act & Assert
-    await expect(service.findById(999)).rejects.toThrow("User not found");
-  });
-});
-```
-
-### Comandos de Teste
-
-```bash
-# Executar todos os testes
-$ npm run test
-
-# Testes em modo watch
-$ npm run test --watch
-
-# Executar testes específicos
-$ npm run test -- user.service.spec.ts
-
-# Cobertura de código
-$ npm run test --coverage
-```
-
-## ⚙️ Configurações de Ambiente
-
-### Variáveis Obrigatórias
-
-Configure as seguintes variáveis no arquivo `.env` ou AWS Secrets Manager:
-
-```bash
-# Banco de dados
-DATABASE_URL=postgres://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-DATABASE_USERNAME=user
-DATABASE_PASSWORD=password
-DATABASE_NAME=dbname
-
-# Autenticação
-JWT_SECRET=your-super-secret-jwt-key-here
-
-# APIs externas
-TOT_GUARD_URL=https://api.totguard.com
-
-# AWS
-AWS_BUCKET_NAME=gbm-bucket-name
-
 # Aplicação
 PORT=3000
 NODE_ENV=development
 TZ=UTC
 
-# Monitoramento (opcional)
-SENTRY_DSN=https://your-sentry-dsn@sentry.io/project
+# Banco de dados
+DATABASE_URL=postgres://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USERNAME=postgres
+DATABASE_PASSWORD=postgres
+DATABASE_NAME=nstech
+
+# Autenticação (chave pública RS256 em base64)
+JWT_SECRET=<base64-encoded-public-key>
+
+# Keycloak (URL do realm sem barra final)
+# Exemplo: https://auth.nstech.com.br/realms/nstech
+KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm>
+
+# AWS
+AWS_BUCKET_NAME=nstech-bucket
 ```
 
-### Exemplo de Configuração AWS Secrets Manager
-
-```json
-{
-  "DATABASE_URL": "postgresql://user:pass@host:5432/db",
-  "JWT_SECRET": "super-secret-key",
-  "TOT_GUARD_URL": "https://api.totguard.com",
-  "AWS_BUCKET_NAME": "gbm-production-bucket",
-  "SENTRY_DSN": "https://key@sentry.io/project"
-}
-```
-
-## 📝 Convenções e Padrões
-
-### Nomenclatura
-- **Arquivos:** kebab-case (`user-service.ts`)
-- **Classes:** PascalCase (`UserService`)
-- **Métodos:** camelCase (`findById`)
-- **Constantes:** UPPER_SNAKE_CASE (`DATABASE_CONNECTION`)
-- **Variáveis:** camelCase (`userData`)
-
-### Estrutura de Pastas
-```
-src/
-├── config/          # Configurações da aplicação
-├── infra/           # Infraestrutura (banco, APIs, etc.)
-│   ├── database/    # Schema e configuração do banco
-│   ├── repositories/# Padrão Repository
-│   ├── bucket/      # Serviços AWS S3
-│   └── http-client/ # Clientes HTTP externos
-├── modules/         # Módulos de domínio
-├── shared/          # Código compartilhado
-│   ├── auth/        # Autenticação e autorização
-│   ├── decorators/  # Decorators customizados
-│   ├── dto/         # DTOs compartilhados
-│   ├── errors/      # Erros customizados
-│   ├── utils/       # Utilitários (data, número)
-│   └── services/    # Serviços compartilhados
-└── lib/             # Bibliotecas customizadas
-```
-
-### Commits Convencionais
-
-Use conventional commits para mensagens padronizadas:
+### 3. Banco de dados
 
 ```bash
-feat: add user registration endpoint
-fix: resolve database connection timeout
-docs: update API documentation
-refactor: improve error handling in auth service
-test: add unit tests for user service
-chore: update dependencies
+# Aplicar migrations
+npm run prisma:migrate
+
+# Gerar client tipado (necessário após alterar o schema)
+npm run prisma:generate
 ```
 
-## 🚀 Deploy
-
-### Deploy Automático via GitHub Actions
-
-O projeto possui workflows configurados para deploy automático:
-
-- **develop branch** → Deploy para ambiente de desenvolvimento
-- **main branch** → Deploy para ambiente de produção
-
-### Deploy Manual
+### 4. Executar a aplicação
 
 ```bash
-# Build da aplicação
-$ npm run build
+# Modo watch (desenvolvimento)
+npm run start:dev
 
-# Deploy com PM2
-$ pm2 start ecosystem.config.js
-
-# Monitorar logs
-$ pm2 logs gbm-app-template-backend
+# Modo produção
+npm run start:prod
 ```
-
-## 📚 Recursos Adicionais
-
-- [Documentação NestJS](https://docs.nestjs.com/)
-- [Documentação Kysely](https://kysely.dev/docs/getting-started)
-- [AWS SDK para JavaScript](https://docs.aws.amazon.com/sdk-for-javascript/)
-- [Jest Testing Framework](https://jestjs.io/docs/getting-started)
-
-## 🆘 Suporte
-
-Para dúvidas ou problemas:
-
-1. Consulte a documentação da API em `/doc`
-2. Verifique os logs da aplicação
-3. Entre em contato com a equipe de desenvolvimento
 
 ---
 
-**Desenvolvido por:** Equipe GBM Logística  
-**Autor:** Ryan Vieira Souza <ryan.vieira@gbmlogistica.com.br>
+## Estrutura de pastas
+
+```
+src/
+├── config/
+│   └── env/                  # Validação e tipagem das variáveis de ambiente
+├── health/                   # Health check endpoints (Kubernetes probes)
+├── infra/
+│   ├── bucket/               # Upload/download AWS S3
+│   ├── database/             # PrismaService e client gerado
+│   ├── prometheus/           # Métricas customizadas
+│   └── repositories/         # Repository pattern (acesso ao banco)
+├── modules/
+│   └── example/              # Módulo de exemplo — copie e adapte
+│       ├── __test__/
+│       ├── http/controllers/
+│       └── services/
+├── shared/
+│   ├── auth/                 # JwtAuthGuard + estratégia JWT (Passport)
+│   ├── decorators/           # @Public, etc.
+│   ├── filters/              # Filtro global de exceções
+│   ├── interceptors/         # Interceptor de métricas
+│   ├── policies/             # @Policies decorator + PoliciesGuard (Keycloak roles)
+│   └── utils/                # date, number
+└── lib/                      # Configurações de libs (dayjs, sentry)
+```
+
+---
+
+## Como criar um novo módulo
+
+Copie a pasta `src/modules/example` e renomeie conforme o domínio:
+
+```
+src/modules/orders/
+├── __test__/
+│   └── orders.service.spec.ts
+├── http/controllers/
+│   ├── dto/
+│   │   ├── orders-request.dto.ts
+│   │   └── orders-response.dto.ts
+│   └── orders.controller.ts
+├── services/
+│   └── orders.service.ts
+└── orders.module.ts
+```
+
+Adicione o novo module em `AppModule`:
+
+```ts
+// src/app.module.ts
+import { OrdersModule } from "./modules/orders/orders.module";
+
+@Module({
+  imports: [
+    // ...
+    OrdersModule,
+  ],
+})
+export class AppModule {}
+```
+
+---
+
+## Autenticação e autorização
+
+### Guard global JWT
+
+Todos os endpoints são protegidos por padrão via `JwtAuthGuard`. Para tornar um endpoint público:
+
+```ts
+import { Public } from "@/shared/decorators/public.decorator";
+
+@Public()
+@Get("ping")
+ping() {
+  return "pong";
+}
+```
+
+### Validação de roles Keycloak com `@Policies`
+
+Use o decorator `@Policies(audience, role)` para exigir uma role específica do token Keycloak. O guard verifica `resource_access[audience].roles` no JWT.
+
+```ts
+import { Policies } from "@/shared/policies/policies.decorator";
+
+@Get("orders")
+@Policies("meu-client-id", "orders:read")
+findAll() { ... }
+
+@Post("orders")
+@Policies("meu-client-id", "orders:write")
+create(@Body() data: CreateOrderDto) { ... }
+```
+
+**Respostas de erro padronizadas:**
+
+| Situação | HTTP | Código |
+|---|---|---|
+| Header Authorization ausente | 401 | `SEC-401-001` |
+| Token expirado | 401 | `SEC-401-002` |
+| Token inválido / assinatura inválida | 403 | `SEC-403-001` |
+| Audience não encontrada no token | 403 | `SEC-403-003` |
+| Role insuficiente | 403 | `SEC-403-004` |
+
+---
+
+## Health checks (Kubernetes)
+
+| Endpoint | Probe | O que verifica |
+|---|---|---|
+| `GET /health/startup` | Startup Probe | Apenas se a aplicação inicializou |
+| `GET /health/live` | Liveness Probe | Apenas se o processo está vivo (sem I/O externo) |
+| `GET /health/ready` | Readiness Probe | Conexão com o banco de dados |
+
+- Retorna **HTTP 200** quando saudável, **HTTP 503** quando falhar.
+- `/health/startup` e `/health/live` nunca fazem I/O externo.
+- Para adicionar novos checks em `/health/ready` (ex: Redis, API externa), adicione um `HealthIndicator` em `src/health/` seguindo o padrão de `PrismaHealthIndicator`.
+
+---
+
+## Upload de arquivos (AWS S3)
+
+```ts
+import { BucketService } from "@/infra/bucket/bucket.service";
+
+// Gerar URL pré-assinada de upload
+const { url, key } = await bucketService.generateUploadUrl(
+  "invoices",          // pasta dentro do bucket
+  "nota-fiscal.pdf",
+  "application/pdf"
+);
+
+// Obter URL de download
+const downloadUrl = await bucketService.get("invoices/nota-fiscal.pdf");
+
+// Deletar arquivos
+await bucketService.deleteObjects(["invoices/old.pdf"]);
+```
+
+---
+
+## Repository pattern
+
+Cada entidade do banco tem seu próprio repository em `src/infra/repositories/`. Use `PrismaService` diretamente via injeção:
+
+```ts
+// src/infra/repositories/orders.repository.ts
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "../database/prisma.service";
+
+@Injectable()
+export class OrdersRepository {
+  constructor(private readonly prisma: PrismaService) {}
+
+  findAll() {
+    return this.prisma.order.findMany();
+  }
+}
+```
+
+Registre no `RepositoryModule` e exporte para uso nos services.
+
+---
+
+## Utilitários
+
+### Datas
+
+```ts
+import { format, isAfter, diffInMinutes } from "@/shared/utils/date";
+
+format(new Date());                            // "2025-01-15"
+isAfter("2025-12-25", "2025-12-24");          // true
+diffInMinutes(new Date(), pastDate);           // número de minutos
+```
+
+### Números
+
+```ts
+import { formatDecimal } from "@/shared/utils/number";
+
+formatDecimal(1234.5678, 2); // "1234.57"
+```
+
+---
+
+## Testes
+
+O projeto usa `@suites/unit` para testes unitários isolados sem precisar subir o módulo NestJS completo.
+
+```ts
+// src/modules/orders/__test__/orders.service.spec.ts
+import { Mocked, TestBed } from "@suites/unit";
+import { OrdersService } from "../services/orders.service";
+import { OrdersRepository } from "@/infra/repositories/orders.repository";
+
+describe("OrdersService", () => {
+  let service: OrdersService;
+  let repository: Mocked<OrdersRepository>;
+
+  beforeEach(async () => {
+    const { unit, unitRef } = await TestBed.solitary(OrdersService).compile();
+    service = unit;
+    repository = unitRef.get(OrdersRepository);
+  });
+
+  it("should return all orders", async () => {
+    repository.findAll.mockResolvedValue([]);
+    const result = await service.findAll({});
+    expect(result).toEqual([]);
+  });
+});
+```
+
+```bash
+# Rodar testes
+npm run test
+
+# Watch mode
+npm run test -- --watch
+
+# Arquivo específico
+npm run test -- orders.service.spec.ts
+```
+
+---
+
+## Observabilidade
+
+| Recurso | URL | Observação |
+|---|---|---|
+| Swagger | `/doc` | Disponível apenas fora de `production` |
+| Métricas Prometheus | `/metrics` | Protegido por Basic Auth |
+| Sentry | — | Configure `SENTRY_DSN` no ambiente |
+
+---
+
+## Convenções
+
+- **Arquivos:** `kebab-case` → `orders.service.ts`
+- **Classes:** `PascalCase` → `OrdersService`
+- **Métodos/variáveis:** `camelCase` → `findAll`
+- **Constantes de injeção:** `UPPER_SNAKE_CASE` → `JWT_VALIDATOR`
+- **Commits:** [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`, `test:`)
+
+---
+
+## Migrations (Prisma)
+
+```bash
+# Criar e aplicar nova migration em desenvolvimento
+npm run prisma:migrate
+
+# Regenerar o client após alterar schema.prisma
+npm run prisma:generate
+```
+
+O arquivo de schema fica em `prisma/schema.prisma`.

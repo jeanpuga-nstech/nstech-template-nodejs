@@ -1,6 +1,5 @@
 import { NotFoundException } from "@nestjs/common";
 import { Mocked, TestBed } from "@suites/unit";
-import { ProductId } from "@/infra/database/schema/public/Product";
 import { ProductRepository } from "@/infra/repositories/product.repository";
 import { ExampleService } from "../services/example.service";
 
@@ -31,9 +30,11 @@ describe("ExampleService", () => {
     const updateProductResult = { name: "Updated Product" };
 
     productRepository.findByHashId.mockResolvedValue({
-      id: 1 as ProductId,
+      id: "550e8400-e29b-41d4-a716-446655440000",
       name: "Old Product",
       externalId: hashId,
+      created_at: new Date(),
+      updated_at: new Date(),
     });
 
     await service.updateProduct(hashId, updateProductResult);
@@ -58,9 +59,11 @@ describe("ExampleService", () => {
     const hashId = "someHashId";
 
     productRepository.findByHashId.mockResolvedValue({
-      id: 1 as ProductId,
+      id: "550e8400-e29b-41d4-a716-446655440001",
       name: "Product to be deleted",
       externalId: hashId,
+      created_at: new Date(),
+      updated_at: new Date(),
     });
 
     await service.deleteProduct(hashId);

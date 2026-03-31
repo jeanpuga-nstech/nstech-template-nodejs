@@ -12,6 +12,7 @@ import {
   SerializeOptions,
 } from "@nestjs/common";
 import { ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Policies } from "@/shared/policies/policies.decorator";
 import { ExampleService } from "../../services/example.service";
 import { CreateProductRequestDTO, FindProductsRequestDTO } from "./dto/example-request.dto";
 import { FindProductsResponseDTO } from "./dto/example-response.dto";
@@ -23,6 +24,7 @@ export class ExampleController {
 
   @Get()
   @ApiOperation({ summary: "Busca todos os produtos" })
+  @Policies("account", "manage-account")
   @ApiOkResponse({
     type: FindProductsResponseDTO,
     isArray: true,
